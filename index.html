@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Harting 报价智能查询系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --secondary: #3498db;
+            --success: #27ae60;
+            --warning: #f39c12;
+            --danger: #e74c3c;
+            --light: #ecf0f1;
+            --dark: #34495e;
+        }
+        
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding-top: 20px;
+            padding-bottom: 50px;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .card {
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.08);
+            margin-bottom: 25px;
+            border: none;
+        }
+        
+        .card-header {
+            background-color: var(--primary);
+            color: white;
+            font-weight: 600;
+            padding: 15px 20px;
+            border: none;
+        }
+        
+        .card-body {
+            padding: 25px;
+        }
+        
+        .result-card {
+            min-height: 400px;
+        }
+        
+        .btn-primary {
+            background-color: var(--secondary);
+            border: none;
+            padding: 10px 20px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary:hover {
+            background-color: var(--primary);
+            transform: translateY(-2px);
+        }
+        
+        .btn-success {
+            background-color: var(--success);
+            border: none;
+        }
+        
+        .btn-warning {
+            background-color: var(--warning);
+            border: none;
+        }
+        
+        textarea {
+            min-height: 150px;
+            font-family: monospace;
+            border-radius: 8px;
+            padding: 15px;
+            font-size: 16px;
+        }
+        
+        .result-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        
+        .result-table th {
+            background-color: var(--primary);
+            color: white;
+            padding: 12px 15px;
+            text-align: left;
+            position: sticky;
+            top: 0;
+        }
+        
+        .result-table td {
+            padding: 10px 15px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .result-table tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        
+        .result-table tr:hover {
+            background-color: #e9f7fe;
+        }
+        
+        .missing-list {
+            list-style-type: none;
+            padding: 0;
+        }
+        
+        .missing-list li {
+            background-color: #fff8e1;
+            padding: 10px 15px;
+            margin-bottom: 8px;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .badge {
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #7f8c8d;
+            font-size: 14px;
+            margin-top: 30px;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+        
+        @media (max-width: 768px) {
+            .card-body {
+                padding: 15px;
+            }
+            
+            textarea {
+                min-height: 120px;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+            }
+            
+            .action-buttons .btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header text-center">
+            <h1><i class="fas fa-search-dollar me-3"></i>Harting 报价智能查询系统</h1>
+            <p class="lead">快速查询历史报价 · 智能识别需询价型号 · 多平台支持</p>
+        </div>
+        
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-list me-2"></i>输入型号清单
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">粘贴客户询价清单（每行一个型号或混合文本）</label>
+                            <textarea class="form-control" id="partList" placeholder="例如：
+请报价以下Harting型号：
+9474747010 
+9330062716 
+9560008175
+另外还有9200042711和9300165425
+..."></textarea>
+                        </div>
+                        
+                        <div class="d-grid gap-2 d-md-flex">
+                            <button class="btn btn-primary" onclick="processList()">
+                                <i class="fas fa-cogs me-2"></i>处理型号清单
+                            </button>
+                            <button class="btn btn-outline-secondary" onclick="loadExample()">
+                                <i class="fas fa-lightbulb me-2"></i>加载示例
+                            </button>
+                        </div>
+                        
+                        <div class="mt-4">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                系统会自动识别型号，支持各种格式：纯型号、混合文本、PDF/Excel粘贴内容
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card d-none" id="missingPartsCard">
+                    <div class="card-header bg-warning text-dark">
+                        <i class="fas fa-exclamation-triangle me-2"></i>需询价型号
+                    </div>
+                    <div class="card-body">
+                        <ul class="missing-list" id="missingPartsList"></ul>
+                        
+                        <div class="action-buttons">
+                            <button class="btn btn-warning" onclick="exportMissingList()">
+                                <i class="fas fa-file-excel me-2"></i>导出询价清单
+                            </button>
+                            <button class="btn btn-outline-secondary" onclick="copyMissingList()">
+                                <i class="fas fa-copy me-2"></i>复制到剪贴板
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-6">
+                <div class="card result-card">
+                    <div class="card-header bg-success">
+                        <i class="fas fa-table me-2"></i>报价结果
+                    </div>
+                    <div class="card-body">
+                        <div id="resultsContainer">
+                            <div class="text-center py-5" id="emptyState">
+                                <i class="fas fa-inbox fa-4x mb-4 text-muted"></i>
+                                <h4>等待查询</h4>
+                                <p class="text-muted">处理型号清单后，报价结果将显示在这里</p>
+                            </div>
+                            
+                            <div id="resultsTable" class="d-none">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <div>
+                                        <span class="badge bg-success" id="foundCount">0</span> 个型号找到报价
+                                    </div>
+                                    <div>
+                                        <span class="badge bg-warning" id="missingCount">0</span> 个型号需询价
+                                    </div>
+                                </div>
+                                
+                                <div class="table-responsive">
+                                    <table class="result-table">
+                                        <thead>
+                                            <tr>
+                                                <th>型号</th>
+                                                <th>报价日期</th>
+                                                <th>成本</th>
+                                                <th>报价</th>
+                                                <th>利润率</th>
+                                                <th>货期</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="resultsBody"></tbody>
+                                    </table>
+                                </div>
+                                
+                                <div class="action-buttons">
+                                    <button class="btn btn-success" onclick="exportResults()">
+                                        <i class="fas fa-file-excel me-2"></i>导出报价单
+                                    </button>
+                                    <button class="btn btn-primary" onclick="generateEmail()">
+                                        <i class="fas fa-envelope me-2"></i>生成客户邮件
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>Harting 报价智能查询系统 &copy; 2023 | 支持 PC、iOS 和 Android</p>
+            <p class="small">数据实时更新于 Supabase 数据库 | 最后同步: <span id="lastSync">--</span></p>
+        </div>
+    </div>
+
+    <script>
+        // Supabase 配置
+        const SUPABASE_URL = 'https://kgpsulislatgxbuntxrq.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtncHN1bGlzbGF0Z3hidW50eHJxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTQyMjQyNzksImV4cCI6MjAyOTgwMDI3OX0.Nf7XaKt2d4NpGg9Rj9yGZ8PzqgSxGt6Hf7wY3b3sJkI';
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        
+        // 状态变量
+        let extractedParts = [];
+        let foundQuotations = [];
+        let missingParts = [];
+        let allResults = [];
+        
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('lastSync').textContent = new Date().toLocaleString();
+        });
+        
+        // 加载示例数据
+        function loadExample() {
+            const exampleList = `客户询价清单：
+            
+Harting 型号列表：
+1. 09300062716
+2. 09330062716
+3. 09560008175
+4. 09200042711
+5. 09300165425
+6. 09200042611
+7. 09454521924
+8. 09200600200
+9. 09300062716
+10. 09120000030
+
+请尽快报价，谢谢！`;
+            
+            document.getElementById('partList').value = exampleList;
+        }
+        
+        // 处理型号清单
+        function processList() {
+            const input = document.getElementById('partList').value;
+            if (!input.trim()) {
+                alert('请输入型号清单');
+                return;
+            }
+            
+            // 显示加载状态
+            document.getElementById('emptyState').innerHTML = `
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="visually-hidden">加载中...</span>
+                    </div>
+                    <h4>处理中...</h4>
+                    <p class="text-muted">正在提取型号并查询数据库</p>
+                </div>
+            `;
+            
+            // 提取型号
+            extractPartNumbers(input);
+        }
+        
+        // 从文本中提取型号
+        function extractPartNumbers(text) {
+            // Harting 型号通常是 10-12 位数字，可能以 09 开头
+            const pattern = /\b(?:09)?\d{8,12}\b/g;
+            const matches = text.match(pattern) || [];
+            
+            // 去重并规范化型号
+            extractedParts = [...new Set(matches.map(p => {
+                // 确保型号为10位数字（Harting标准）
+                return p.replace(/^09/, '').padStart(10, '0');
+            }))];
+            
+            console.log('提取的型号:', extractedParts);
+            
+            if (extractedParts.length === 0) {
+                document.getElementById('emptyState').innerHTML = `
+                    <div class="text-center py-5">
+                        <i class="fas fa-exclamation-triangle fa-4x mb-4 text-warning"></i>
+                        <h4>未找到型号</h4>
+                        <p class="text-muted">无法从输入文本中识别Harting型号</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // 查询数据库
+            queryDatabase(extractedParts);
+        }
+        
+        // 查询数据库
+        async function queryDatabase(partNumbers) {
+            try {
+                const { data, error } = await supabase
+                    .from('harting_quotations')
+                    .select('*')
+                    .in('part_number', partNumbers);
+                
+                if (error) throw error;
+                
+                // 处理结果
+                processResults(partNumbers, data);
+            } catch (error) {
+                console.error('数据库查询错误:', error);
+                document.getElementById('emptyState').innerHTML = `
+                    <div class="text-center py-5">
+                        <i class="fas fa-exclamation-circle fa-4x mb-4 text-danger"></i>
+                        <h4>查询失败</h4>
+                        <p class="text-muted">${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        // 处理查询结果
+        function processResults(partNumbers, results) {
+            // 找到报价的型号
+            foundQuotations = results;
+            
+            // 找到结果的型号集合
+            const foundPartNumbers = new Set(results.map(item => item.part_number));
+            
+            // 未找到报价的型号
+            missingParts = partNumbers.filter(pn => !foundPartNumbers.has(pn));
+            
+            // 合并所有结果（包含未找到的型号）
+            allResults = [
+                ...results,
+                ...missingParts.map(pn => ({
+                    part_number: pn,
+                    status: 'missing'
+                }))
+            ];
+            
+            // 更新UI
+            updateUI();
+        }
+        
+        // 更新用户界面
+        function updateUI() {
+            // 隐藏空状态
+            document.getElementById('emptyState').classList.add('d-none');
+            document.getElementById('resultsTable').classList.remove('d-none');
+            
+            // 更新计数
+            document.getElementById('foundCount').textContent = foundQuotations.length;
+            document.getElementById('missingCount').textContent = missingParts.length;
+            
+            // 显示需询价型号卡片
+            const missingCard = document.getElementById('missingPartsCard');
+            if (missingParts.length > 0) {
+                missingCard.classList.remove('d-none');
+                updateMissingList();
+            } else {
+                missingCard.classList.add('d-none');
+            }
+            
+            // 更新结果表格
+            updateResultsTable();
+        }
+        
+        // 更新结果表格
+        function updateResultsTable() {
+            const tbody = document.getElementById('resultsBody');
+            tbody.innerHTML = '';
+            
+            // 按报价日期降序排序
+            const sortedResults = [...foundQuotations].sort((a, b) => 
+                new Date(b.quote_date) - new Date(a.quote_date)
+            );
+            
+            sortedResults.forEach(item => {
+                const row = document.createElement('tr');
+                
+                // 计算利润率（如果未提供）
+                const profitMargin = item.profit_margin !== null ? 
+                    (item.profit_margin * 100).toFixed(2) + '%' : 
+                    item.cost ? 
+                        (((item.offer - item.cost) / item.cost) * 100).toFixed(2) + '%' : 
+                        'N/A';
+                
+                row.innerHTML = `
+                    <td><strong>${item.part_number}</strong></td>
+                    <td>${item.quote_date}</td>
+                    <td>${item.cost ? '¥' + item.cost.toFixed(2) : 'N/A'}</td>
+                    <td><span class="badge bg-primary">¥${item.offer.toFixed(2)}</span></td>
+                    <td>${profitMargin}</td>
+                    <td>${item.delivery || 'N/A'}</td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+        }
+        
+        // 更新需询价列表
+        function updateMissingList() {
+            const list = document.getElementById('missingPartsList');
+            list.innerHTML = '';
+            
+            missingParts.forEach(part => {
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <span>${part}</span>
+                    <span class="badge bg-warning">需询价</span>
+                `;
+                list.appendChild(li);
+            });
+        }
+        
+        // 导出报价结果到Excel
+        function exportResults() {
+            if (foundQuotations.length === 0) {
+                alert('没有可导出的报价数据');
+                return;
+            }
+            
+            // 创建工作簿
+            const wb = XLSX.utils.book_new();
+            
+            // 准备数据
+            const exportData = foundQuotations.map(item => ({
+                '型号': item.part_number,
+                '报价日期': item.quote_date,
+                '成本': item.cost,
+                '报价': item.offer,
+                '利润率': item.profit_margin ? (item.profit_margin * 100).toFixed(2) + '%' : '',
+                '货期': item.delivery || '',
+                '起订量': item.moq || '',
+                '询价数量': item.inquiry_quantity || '',
+                '详细型号': item.detailed_part_number || ''
+            }));
+            
+            // 创建工作表
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            
+            // 添加工作表到工作簿
+            XLSX.utils.book_append_sheet(wb, ws, 'Harting报价');
+            
+            // 导出文件
+            const dateStr = new Date().toISOString().slice(0, 10);
+            XLSX.writeFile(wb, `Harting_报价_${dateStr}.xlsx`);
+        }
+        
+        // 导出需询价列表
+        function exportMissingList() {
+            if (missingParts.length === 0) {
+                alert('没有需要询价的型号');
+                return;
+            }
+            
+            // 创建工作簿
+            const wb = XLSX.utils.book_new();
+            
+            // 准备数据
+            const exportData = missingParts.map(part => ({
+                '型号': part,
+                '状态': '需询价',
+                '询价日期': new Date().toISOString().slice(0, 10),
+                '供应商反馈': '',
+                '报价': '',
+                '货期': ''
+            }));
+            
+            // 创建工作表
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            
+            // 添加工作表到工作簿
+            XLSX.utils.book_append_sheet(wb, ws, '需询价型号');
+            
+            // 导出文件
+            const dateStr = new Date().toISOString().slice(0, 10);
+            XLSX.writeFile(wb, `Harting_需询价型号_${dateStr}.xlsx`);
+        }
+        
+        // 复制需询价列表到剪贴板
+        function copyMissingList() {
+            if (missingParts.length === 0) {
+                alert('没有需要询价的型号');
+                return;
+            }
+            
+            const text = missingParts.join('\n');
+            navigator.clipboard.writeText(text)
+                .then(() => alert('需询价型号已复制到剪贴板'))
+                .catch(err => console.error('复制失败:', err));
+        }
+        
+        // 生成客户邮件
+        function generateEmail() {
+            if (foundQuotations.length === 0) {
+                alert('没有可报价的数据');
+                return;
+            }
+            
+            const emailBody = `
+尊敬的客户，
+
+感谢您的询价，以下是您查询的Harting型号报价：
+
+${foundQuotations.map(item => `型号: ${item.part_number} | 报价: ¥${item.offer.toFixed(2)} | 货期: ${item.delivery || '待确认'}`).join('\n')}
+
+${missingParts.length > 0 ? `
+注：以下型号需要进一步确认，我们会尽快提供报价：
+${missingParts.join(', ')}
+` : ''}
+
+如有任何问题，请随时与我们联系。
+
+此致
+敬礼
+${localStorage.getItem('userName') || '您的团队'}
+            `;
+            
+            const emailSubject = `Harting产品报价 - ${new Date().toLocaleDateString()}`;
+            
+            const mailtoLink = `mailto:?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
+            window.location.href = mailtoLink;
+        }
+    </script>
+</body>
+</html>
